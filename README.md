@@ -14,6 +14,7 @@ fbi, rsync, git, django, postgresql, pip, python3
 - voice commands for the same controls
 - remove picture from frame and add filename to exclude list so rsync doesn't sync it on next sync
 - first run wizard for initial setup (set wireless network info, keyboard map, sleep intervals, voice commands, apis)
+- use twitter for communication to owner- DM IP to owner on boot, DM status updates, etc
 
 ### Install instructions
 ```
