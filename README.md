@@ -17,6 +17,7 @@ http://www.nongnu.org/fbi-improved/#docs
 - remove picture from frame and add filename to exclude list so rsync doesn't sync it on next sync
 - first run wizard for initial setup (set wireless network info, keyboard map, sleep intervals, voice commands, apis)
 - use twitter for communication to owner- DM IP to owner on boot, DM status updates, etc
+- create random hostname if one is not provided in wizard
 
 ### Install instructions
 ```
