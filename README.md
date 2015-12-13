@@ -23,3 +23,5 @@ http://www.nongnu.org/fbi-improved/#docs
 ```
 apt-get install python3 fib rsync git python3-pip postgresql
 ```
+
+Probably the best way to do this this time is by using aws s3 sync. Create an album in google photos, download it locally, sync to aws, have the frame sync with aws periodically.
