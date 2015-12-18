@@ -1,0 +1,12 @@
+{
+    "first_run": "true",
+    "aws": {
+        "enabled": "",
+        "setting_type": "env"
+    },
+    "gphotos": {
+        "enabeld": "",
+        "user_id": "",
+        "album_name": ""
+    }
+}
