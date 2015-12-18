@@ -40,9 +40,7 @@ class SuperDPF(object):
 
     @property
     def is_first_run(self):
-        if self.settings:
-            return False
-        return True
+        return not self.settings
 
     @property
     def get_album_name(self):
