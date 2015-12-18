@@ -6,8 +6,7 @@ import collections
 
 class SuperDPF(object):
     PATHS = {'project': '/home/pi/SuperDPF'}
-    PATHS['conf_template'] = \
-        '{}/.sdpf_settings_template.json'.format(PATHS['project'])
+    PATHS['conf_template'] = '{}/.conf_template.json'.format(PATHS['project'])
     PATHS['config'] = '{}/config.json'.format(PATHS['project'])
     PATHS['photos'] = '{}/sdpf_photos'.format(PATHS['project'])
 
@@ -26,6 +25,8 @@ class SuperDPF(object):
 
             self.create_photo_dirs()
             self.set_storage_types()
+        else:
+            self.sync()
 
     @property
     def settings(self):
@@ -106,8 +107,6 @@ class SuperDPF(object):
         self.sync_gphotos()
 
 dpf = SuperDPF()
-
-if dpf.is_first_run
 
 '''
     bash calls sdpf
