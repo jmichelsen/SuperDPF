@@ -1,3 +1,7 @@
+# SuperDPF variable data
+sdpf_photos/
+config.json
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

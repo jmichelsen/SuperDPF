@@ -1,0 +1,15 @@
+{
+    "first_run": "true",
+    "aws": {
+        "a_enabled": "",
+        "setting_type": "env",
+        "bucket": "",
+        "access_key": "",
+        "secret_key": ""
+    },
+    "gphotos": {
+        "g_enabled": "",
+        "user_id": "",
+        "album_name": ""
+    }
+}
