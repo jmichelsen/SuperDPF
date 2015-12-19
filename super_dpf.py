@@ -121,9 +121,9 @@ class GPhotoController(BaseDPF):
         if urlsplit(url).path.startswith('/data/feed/'):
             return url
         elif urlsplit(url).netlock == 'picasaweb.google.com':
-            page = urlopen(url).read()
+            response = requests.get(url)
             parsed = BeautifulStoneSoup(
-                page, selfClosingTags=['meta', 'link', 'base'])
+                response.content, selfClosingTags=['meta', 'link', 'base'])
 
             for link in parsed.findAll('link'):
                 if rel in link:
