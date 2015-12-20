@@ -4,8 +4,7 @@ import json
 import os
 import requests
 import sys
-
-from PIL import Image
+import Image
 
 from urlparse import urlsplit
 
@@ -177,6 +176,10 @@ class GPhotoController(BaseDPF):
 
 
 class FlickrController(BaseDPF):
+    pass
+
+
+class InstagramController(BaseDPF):
     pass
 
 

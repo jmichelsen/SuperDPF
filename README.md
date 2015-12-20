@@ -24,6 +24,9 @@ http://www.nongnu.org/fbi-improved/#docs
 apt-get install fbi git python-pip
 ```
 ```
+git clone https://github.com/jmichelsen/SuperDPF.git && cd SuperDPF
+```
+```
 sudo pip install virtualenv virtualenvwrapper
 ```
 ```
