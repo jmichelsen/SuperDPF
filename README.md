@@ -4,6 +4,7 @@ The next generation of Digital Picture Frames!
 ### Specifically designed for use with a Raspberry Pi running Raspbian, but any Linux distro should work just fine as long as the required packages can be installed
 
 Required system packages:
+8GB SD card (raspien-lite and system packages require ~2GB space but you'll want extra space for picture storage)
 fbi, rsync, git, django, postgresql, pip, python3, fim
 
 http://www.nongnu.org/fbi-improved/#docs
@@ -21,7 +22,7 @@ http://www.nongnu.org/fbi-improved/#docs
 
 ### Install instructions
 ```
-apt-get install fbi git python-pip
+apt-get install fbi git python-pip libjpeg-dev
 ```
 ```
 git clone https://github.com/jmichelsen/SuperDPF.git && cd SuperDPF

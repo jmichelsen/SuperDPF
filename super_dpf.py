@@ -4,7 +4,8 @@ import json
 import os
 import requests
 import sys
-import Image
+
+from PIL import Image
 
 from urlparse import urlsplit
 
