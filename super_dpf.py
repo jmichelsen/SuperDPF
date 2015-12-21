@@ -307,6 +307,7 @@ class SuperDPF(AWSController, GPhotoController):
 
     def run(self):
         self._sync()
+        os.system('/usr/bin/supervisorctl restart fim_sdpf')
 
 if __name__ == "__main__":
     dpf = SuperDPF()
