@@ -241,7 +241,7 @@ class GPhotoController(BaseDPF):
         if not os.path.isdir(self.gphotos_dir):
             os.makedirs(self.gphotos_dir)
 
-        self._save_settings(g_enabled=enable, feed_url=feed_url,
+        self._save_settings(g_enabled=enable, feed_url=list(feed_url),
                             user_id=user_id, album_id=album_id)
 
     def _gphotos_sync(self):
