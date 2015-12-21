@@ -24,6 +24,7 @@ http://www.nongnu.org/fbi-improved/#docs
 ```
 apt-get install fbi git python-pip libjpeg-dev
 ```
+if you choose to use fim instead of fbi, you will need packages: libexif-dev libreadline5 libgif-dev libtiff-dev flex bison
 ```
 git clone https://github.com/jmichelsen/SuperDPF.git && cd SuperDPF
 ```
