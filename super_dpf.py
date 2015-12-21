@@ -177,6 +177,10 @@ class AWSController(BaseDPF):
             enable = 'true' if enable.lower() == 'yes' else ''
             self._save_settings(a_enabled=enable)
         else:
+            aws_settings = self.settings['aws']
+            os.environ['AWS_ACCESS_KEY_ID'] = aws_settings['access_key']
+            os.environ['AWS_SECRET_ACCESS_KEY'] = aws_settings['secret_key']
+
             buckets = []
             s3 = boto3.resource('s3')
             for s3bucket in s3.buckets.all():
