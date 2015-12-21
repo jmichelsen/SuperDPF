@@ -272,7 +272,9 @@ class GPhotoController(BaseDPF):
                             response = requests.get(tag['url'], stream=True)
                             try:
                                 img = Image.open(StringIO(response.content))
-                                img.save('{}'.format(filename))
+                                img.save('{}'.format(filename), optimize=True,
+                                         progressive=True, quality=100,
+                                         subsampling=0)
                             except IOError as e:
                                 logging.error(e)
 
