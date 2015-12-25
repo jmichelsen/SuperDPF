@@ -97,8 +97,12 @@ class SettingsItem:
         else:
             return self.title
 
-    def value_dialog(self):
-        value = raw_input("{}: ".format(self.title))
+    def value_dialog(self, old_value):
+        if old_value:
+            prompt = "{} [{}]:".format(self.title, old_value)
+            value = raw_input(prompt) or old_value
+        else:
+            value = raw_input("{}: ".format(self.title))
         if issubclass(self.value_type, basestring):
             return value
         elif self.value_type == int:
@@ -121,10 +125,11 @@ class BaseDPF(object):
                                '_'.join(pk_list))
 
     @classmethod
-    def settings_dialog(cls):
+    def settings_dialog(cls, old_settings=dict()):
         settings_object = dict()
         for item in cls.REQUIRED_SETTINGS:
-            settings_object[item.name] = item.value_dialog()
+            settings_object[item.name] = item.value_dialog(
+                old_settings.get(item.name))
         return settings_object
 
     @classmethod
@@ -259,6 +264,10 @@ class HotMediaController(BaseDPF):
     pass
 
 
+class ExitConfig(Exception):
+    pass
+
+
 class DPFConfigurator(object):
     PROJECT = os.path.expanduser('~/SuperDPF')
     PATHS = {
@@ -286,6 +295,12 @@ class DPFConfigurator(object):
         self.config_dict.setdefault('accounts', list())
         self._create_photo_dirs()
 
+    def get_account_class_dict(self):
+        return {k.__name__: k for k in self.ACCOUNT_TYPES}
+
+    def get_account_class(self, class_name):
+        return self.get_account_class_dict().get(class_name)
+
     def save(self):
         # serialize before we open the file (and truncate) in write mode
         yaml_str = yaml.dump(self.config_dict)
@@ -300,42 +315,67 @@ class DPFConfigurator(object):
         if klass not in self.ACCOUNT_TYPES:
             print("Unsupported account type! {}".format(klass.__name__))
             return
-        pk = klass.settings_pk(settings_dict)
-        new_account_list = list()
-        replaced = False
-        for account_class, account_settings in self.accounts:
-            if pk == account_class.settings_pk(account_settings):
-                # Replace already existing
-                new_account_list.append(klass, settings_dict)
-                replaced = True
-            else:
-                new_account_list.append( (account_class, account_settings) )
+        self.config_dict['accounts'].append( (klass.__name__, settings_dict))
 
-        if not replaced:
-            new_account_list.append( (klass, settings_dict) )
-
-        self.config_dict['accounts'] = new_account_list
+    def replace_account(self, klass, settings_dict, index):
+        if klass not in self.ACCOUNT_TYPES:
+            print("Unsupported account type! {}".format(klass.__name__))
+            return
+        self.config_dict['accounts'][index] = (klass.__name__, settings_dict)
 
     def add_account_dialog(self):
-        account_types = {k.__name__: k for k in self.ACCOUNT_TYPES}
+        account_types = sorted(self.get_account_class_dict().keys())
         print("Valid account types: {}".format(', '.join(account_types)))
         account_type = raw_input('Account type: ')
-        if account_type in account_types.keys():
-            klass = account_types[account_type]
-            settings = klass.settings_dialog()
-            self.add_account(klass, settings)
+        account_class = self.get_account_class(account_type)
+        if account_class:
+            settings = account_class.settings_dialog()
+            self.add_account(account_class, settings)
             self.save()
         else:
             print("{} was not a valid account type.".format(account_type))
 
+    def edit_account_dialog(self):
+        account_list = list()
+        account_dict = dict()
+        for index, account_entry in enumerate(self.accounts):
+            account_dict[str(index)] = account_entry
+            line = "\t{}\t{}: {}".format(index, *account_entry)
+            account_list.append(line)
+
+        print("Current accounts:\n{}".format("\n".join(account_list)))
+        print("\t+\tAdd new account")
+        print("\tq\tQuit")
+        account_number = raw_input("Enter account number to edit: ")
+        if account_number == '+':
+            self.add_account_dialog()
+        elif account_number == 'q':
+            raise ExitConfig()
+        elif account_dict.get(account_number):
+            class_name, old_settings = account_dict.get(account_number)
+            account_class = self.get_account_class(class_name)
+            if account_class:
+                settings = account_class.settings_dialog(old_settings)
+                self.replace_account(account_class, settings,
+                                     int(account_number))
+                self.save()
+            else:
+                print("Couldn't resolve account class type: {}"
+                      .format(class_name))
+        else:
+            print("Invalid entry: {}".format(account_number))
+
+
     def _create_photo_dirs(self):
         if not os.path.isdir(self.PATHS['photos']):
             os.makedirs(self.PATHS['photos'])
-        for klass, settings_object in self.accounts:
+        for class_name, settings_object in self.accounts:
+            klass = self.get_account_class(class_name)
             dpf_instance = klass(settings_object)
             account_path = os.path.join(self.PATHS['photos'],
-                                        dpf_instance.subdir())
-            os.makedirs(account_path)
+                                        dpf_instance.subdir)
+            if not os.path.isdir(account_path):
+                os.makedirs(account_path)
 
 
 class SuperDPF(AmazonS3DPF, GPhotoDPF):
@@ -356,9 +396,14 @@ class SuperDPF(AmazonS3DPF, GPhotoDPF):
                 print(msg.format(klass.__name__, pk, e))
 
     def run(self):
-        if not len(self.config.accounts):
-            self.config.add_account_dialog()
-        self._sync()
+        try:
+            while True:
+                self.config.edit_account_dialog()
+        except ExitConfig:
+            pass
+        # if not len(self.config.accounts):
+        #     self.config.add_account_dialog()
+        # self._sync()
         # os.system('/usr/bin/supervisorctl restart sdpf')
 
 if __name__ == "__main__":
