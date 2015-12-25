@@ -5,6 +5,7 @@ import traceback
 import logging
 from logging.config import dictConfig
 import os
+import sys
 import requests
 
 from PIL import Image
@@ -382,7 +383,7 @@ class SuperDPF(AmazonS3DPF, GPhotoDPF):
     def __init__(self):
         self.config = DPFConfigurator()
 
-    def _sync(self):
+    def sync(self, restart_supervisor=False):
         print("Syncing {} accounts".format(len(self.config.accounts)))
         for klass, config in self.config.accounts:
             pk = None
@@ -394,8 +395,10 @@ class SuperDPF(AmazonS3DPF, GPhotoDPF):
                 msg = "Error syncing {} ({}): {}"
                 traceback.print_exc()
                 print(msg.format(klass.__name__, pk, e))
+        if restart_supervisor:
+            os.system('/usr/bin/supervisorctl restart sdpf')
 
-    def run(self):
+    def configure(self):
         try:
             while True:
                 self.config.edit_account_dialog()
@@ -404,8 +407,30 @@ class SuperDPF(AmazonS3DPF, GPhotoDPF):
         # if not len(self.config.accounts):
         #     self.config.add_account_dialog()
         # self._sync()
-        # os.system('/usr/bin/supervisorctl restart sdpf')
+        #
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="SuperDPF")
+    parser.add_argument('--configure',
+                        action='store_true',
+                        dest='configure',
+                        default=False,
+                        help='Enter configuration mode')
+    parser.add_argument('--sync',
+                        action='store_true',
+                        dest='sync',
+                        default=False,
+                        help='Synchronize photos')
+    parser.add_argument('--restart-supervisor',
+                        action='store_true',
+                        dest='restart_supervisor',
+                        default=False,
+                        help='Restart supervisor after sync')
+    args = parser.parse_args(sys.argv[1:])
     dpf = SuperDPF()
-    dpf.run()
+    if args.configure:
+        dpf.configure()
+    elif args.sync:
+        dpf.sync(args.restart_supervisor)
+    else:
+        parser.print_help()
