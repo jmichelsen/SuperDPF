@@ -92,6 +92,10 @@ class BaseDPF(object):
     def stylize_image(image):
         return image
 
+    @property
+    def service_name(self):
+        raise NotImplementedError('Implement service_name in subclass.')
+
 
 class AmazonS3DPF(BaseDPF):
     REQUIRED_SETTINGS = [
