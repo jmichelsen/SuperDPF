@@ -3,7 +3,6 @@ import boto3
 import yaml
 import traceback
 import logging
-from logging.config import dictConfig
 import os
 import sys
 import requests
@@ -12,74 +11,13 @@ from PIL import Image
 
 from urlparse import urlsplit
 
-from StringIO import StringIO
-
 from BeautifulSoup import BeautifulStoneSoup
 
+from StringIO import StringIO
+
+from constants import PATHS
+
 requests.packages.urllib3.disable_warnings()
-
-LOG_LOCATION = os.path.dirname(os.path.realpath(__file__))
-LOGGING = {
-    'version': 1,
-    'formatters': {
-        'standard': {
-            'format': '[%(asctime)s] %(levelname)s [%(name)s:%(lineno)s] %(message)s',
-            'datefmt': '%d/%b/%Y %H:%M:%S'
-        },
-        'verbose': {
-            'format': 'dpf[%(process)d]: %(levelname)s %(name)s[%(module)s] %(message)s'
-        },
-    },
-    'handlers': {
-        'null': {
-            'level': 'DEBUG',
-            'class': 'logging.NullHandler',
-        },
-        # 'mail_admins': {
-        #     'level': 'ERROR',
-        #     'class': 'logging.handlers.AdminEmailHandler'
-        # },
-        'logfile': {
-            'level': 'INFO',
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': '{}/sdpf.log'.format(LOG_LOCATION),
-            'maxBytes': 50000000,
-            'backupCount': 2,
-            'formatter': 'standard',
-        },
-        'console': {
-            'level': 'DEBUG',
-            'class': 'logging.StreamHandler',
-            'formatter': 'standard'
-        },
-        'syslog': {
-            'level': 'INFO',
-            'class': 'logging.handlers.SysLogHandler',
-            'formatter': 'verbose',
-            'address': '/dev/log',
-            'facility': 'local2',
-        }
-    },
-    'loggers': {
-        'django': {
-            'handlers': ['console', 'syslog'],
-            'propagate': True,
-            'level': 'WARN',
-        },
-        'urllib3': {
-            'handlers': ['console', 'logfile', 'syslog'],
-            'propagate': True,
-            'level': 'ERROR',
-        },
-        '': {
-            'handlers': ['console', 'logfile', 'syslog'],
-            'propagate': True,
-            'level': 'DEBUG',
-        },
-    }
-}
-
-dictConfig(LOGGING)
 
 
 class SettingsItem:
@@ -167,9 +105,9 @@ class AmazonS3DPF(BaseDPF):
     def service_name(self):
         return 'Amazon S3'
 
-    def sync(self, photos_path, verify_local):
+    def sync(self, verify_local):
         logging.info('Syncing {}'.format(self.service_name))
-        full_path = '{}/{}'.format(photos_path, self.subdir)
+        full_path = '{}/{}'.format(PATHS['photos'], self.subdir)
         duplicates = list()
         cloud_filelist = list()
 
@@ -240,9 +178,9 @@ class GPhotoDPF(BaseDPF):
                     if link['rel'] == 'alternate':
                         return link['href']
 
-    def sync(self, photos_path, verify_local):
+    def sync(self, verify_local):
         logging.info('Syncing {}'.format(self.service_name))
-        full_path = '{}/{}'.format(photos_path, self.subdir)
+        full_path = '{}/{}'.format(PATHS['photos'], self.subdir)
         duplicates = list()
         cloud_filelist = list()
 
@@ -307,27 +245,20 @@ class ExitConfig(Exception):
 
 
 class DPFConfigurator(object):
-    PROJECT = os.path.expanduser('~/SuperDPF')
-    PATHS = {
-        'conf_template': '{}/.conf_template.json'.format(PROJECT),
-        'config': '{}/config.yml'.format(PROJECT),
-        'photos': '{}/sdpf_photos'.format(PROJECT)
-    }
-
     ACCOUNT_TYPES = [
         AmazonS3DPF,
         GPhotoDPF
     ]
 
     def __init__(self):
-        if not os.path.isfile(self.PATHS['config']):
+        if not os.path.isfile(PATHS['config']):
             logging.info('Initializing empty config...')
-            with open(self.PATHS['config'], 'w') as config_file:
+            with open(PATHS['config'], 'w') as config_file:
                 yaml.dump(dict(), config_file)
             self.config_dict = dict()
 
         else:
-            with open(self.PATHS['config']) as config:
+            with open(PATHS['config']) as config:
                 self.config_dict = yaml.load(config)
 
         self.config_dict.setdefault('accounts', list())
@@ -342,16 +273,12 @@ class DPFConfigurator(object):
     def save(self):
         # serialize before we open the file (and truncate) in write mode
         yaml_str = yaml.dump(self.config_dict)
-        with open(self.PATHS['config'], 'w') as config:
+        with open(PATHS['config'], 'w') as config:
             config.write(yaml_str)
 
     @property
     def accounts(self):
         return self.config_dict.get('accounts')
-
-    @property
-    def photos_path(self):
-        return self.PATHS['photos']
 
     def add_account(self, klass, settings_dict):
         if klass not in self.ACCOUNT_TYPES:
@@ -408,12 +335,12 @@ class DPFConfigurator(object):
             print('Invalid entry: {}'.format(account_number))
 
     def _create_photo_dirs(self):
-        if not os.path.isdir(self.PATHS['photos']):
-            os.makedirs(self.PATHS['photos'])
+        if not os.path.isdir(PATHS['photos']):
+            os.makedirs(PATHS['photos'])
         for class_name, settings_object in self.accounts:
             klass = self.get_account_class(class_name)
             dpf_instance = klass(settings_object)
-            account_path = os.path.join(self.PATHS['photos'],
+            account_path = os.path.join(PATHS['photos'],
                                         dpf_instance.subdir)
             if not os.path.isdir(account_path):
                 logging.info(
@@ -421,20 +348,19 @@ class DPFConfigurator(object):
                 os.makedirs(account_path)
 
 
-class SuperDPF(AmazonS3DPF, GPhotoDPF):
+class SuperDPF(object):
     def __init__(self):
         self.config = DPFConfigurator()
 
     def sync(self, restart_sdpf=False, verify_local=False):
-        logging.info('{} accounts to sync...'.format(len(self.config.accounts)))
+        logging.info('{} accounts to sync..'.format(len(self.config.accounts)))
         for klass, config in self.config.accounts:
             pk = None
             klass = self.config.get_account_class(klass)
             try:
                 pk = klass.settings_pk(config)
-                photos_path = self.config.photos_path
                 instance = klass(config)
-                instance.sync(photos_path, verify_local)
+                instance.sync(verify_local)
             except Exception as e:
                 msg = 'Error syncing {} ({}): {}'
                 traceback.print_exc()
