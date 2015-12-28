@@ -23,8 +23,8 @@ LOGGING = {
     'version': 1,
     'formatters': {
         'standard': {
-            'format': "[%(asctime)s] %(levelname)s [%(name)s:%(lineno)s] %(message)s",
-            'datefmt': "%d/%b/%Y %H:%M:%S"
+            'format': '[%(asctime)s] %(levelname)s [%(name)s:%(lineno)s] %(message)s',
+            'datefmt': '%d/%b/%Y %H:%M:%S'
         },
         'verbose': {
             'format': 'dpf[%(process)d]: %(levelname)s %(name)s[%(module)s] %(message)s'
@@ -100,16 +100,16 @@ class SettingsItem:
 
     def value_dialog(self, old_value):
         if old_value:
-            prompt = "{} [{}]:".format(self.title, old_value)
+            prompt = '{} [{}]:'.format(self.title, old_value)
             value = raw_input(prompt) or old_value
         else:
-            value = raw_input("{}: ".format(self.title))
+            value = raw_input('{}: '.format(self.title))
         if issubclass(self.value_type, basestring):
             return value
         elif self.value_type == int:
             return int(value)
         else:
-            print("Unsupported value type: {}".format(self.value_type))
+            print('Unsupported value type: {}'.format(self.value_type))
             return None
 
 
@@ -122,8 +122,7 @@ class BaseDPF(object):
     @property
     def subdir(self):
         pk_list = [str(s) for s in self.__class__.settings_pk(self.settings)]
-        return "{}__{}".format(self.__class__.__name__,
-                               '_'.join(pk_list))
+        return '{}'.format('_'.join(pk_list))
 
     @classmethod
     def settings_dialog(cls, old_settings=dict()):
@@ -143,63 +142,92 @@ class BaseDPF(object):
             pk.append(settings_object.get(value))
         return pk
 
+    @classmethod
+    def verify_local(cls, cloud_filelist, local_filelist):
+        for local_file in local_filelist:
+            if local_file not in cloud_filelist:
+                logging.info('Deleting local file {} not in {}'.format(
+                    local_file, cls.__name__))
+                os.remove(local_file)
+
+    @staticmethod
+    def stylize_image(image):
+        return image
+
 
 class AmazonS3DPF(BaseDPF):
     REQUIRED_SETTINGS = [
-        SettingsItem('aws_access_key', 'AWS Access Key', primary=True),
+        SettingsItem('aws_access_key', 'AWS Access Key'),
         SettingsItem('aws_secret', 'AWS Secret'),
         SettingsItem('bucket', 'Bucket containing *only* dpf pics',
                      primary=True),
     ]
 
-    # def aws_configure_dialogue(self):
-        # os.environ['AWS_ACCESS_KEY_ID'] = access_key
-        # os.environ['AWS_SECRET_ACCESS_KEY'] = secret_key
+    @property
+    def service_name(self):
+        return 'Amazon S3'
 
-    def sync(self):
+    def sync(self, photos_path, verify_local):
+        logging.info('Syncing {}'.format(self.service_name))
+        full_path = '{}/{}'.format(photos_path, self.subdir)
+        duplicates = list()
+        cloud_filelist = list()
+
         os.environ['AWS_ACCESS_KEY_ID'] = self.settings.get('aws_access_key')
         os.environ['AWS_SECRET_ACCESS_KEY'] = self.settings.get('aws_secret')
-        if not self.aws_configured:
-            logging.info('AWS is not configured.')
-            configure = raw_input('Configure it now? ')
-            if configure.lower() == 'yes':
-                self.aws_configure_dialogue()
-        elif not self.aws_enabled:
-            logging.info('AWS is not enabled.')
-            enable = raw_input('Enable it now? ')
-            enable = 'true' if enable.lower() == 'yes' else ''
-            self._save_settings(a_enabled=enable)
-        else:
-            aws_settings = self.settings['aws']
-            os.environ['AWS_ACCESS_KEY_ID'] = aws_settings['access_key']
-            os.environ['AWS_SECRET_ACCESS_KEY'] = aws_settings['secret_key']
 
-            buckets = []
-            s3 = boto3.resource('s3')
-            for s3bucket in s3.buckets.all():
-                if 'dpf' in s3bucket.name:
-                    buckets.append(s3bucket.name)
+        buckets = []
+        s3 = boto3.resource('s3')
+        for s3bucket in s3.buckets.all():
+            if 'dpf' in s3bucket.name:
+                buckets.append(s3bucket.name)
 
-            if self.settings['aws']['bucket'] not in buckets:
-                buckets.append(self.settings['aws']['bucket'])
+        if self.settings['bucket'] not in buckets:
+            buckets.append(self.settings['bucket'])
 
-            for bucket in buckets:
-                s3bucket = s3.Bucket(bucket)
-                for s3object in s3bucket.objects.iterator():
-                    filename = '{}/{}'.format(self.aws_dir, s3object.key)
-                    if not os.path.isfile(filename):
-                        logging.info('Downloading {}'.format(s3object.key))
-                        bucket.download_file(s3object.key, filename)
+        for bucket in buckets:
+            s3bucket = s3.Bucket(bucket)
+            for s3object in s3bucket.objects.iterator():
+                filename = '{}/{}'.format(full_path, s3object.key)
+                cloud_filelist.append(filename)
+                if not os.path.isfile(filename):
+                    logging.info('Downloading {}'.format(s3object.key))
+                    try:
+                        s3bucket.download_file(s3object.key, filename)
+                    except IOError as e:
+                        logging.error(e)
+                else:
+                    duplicates.append(s3object.key)
+
+        if duplicates:
+            logging.info(
+                'Skipped {} duplicate images from {}.'.format(
+                    len(duplicates), self.service_name))
+
+        if verify_local:
+            local_filelist = \
+                [os.path.join(full_path, f) for f in os.listdir(full_path)]
+            self.verify_local(cloud_filelist, local_filelist)
+            logging.info('Local {} files verified successfully.'.format(
+                self.service_name))
+
+        if not cloud_filelist:
+            logging.info('{} has nothing to sync.'.format(self.service_name))
 
 
 class GPhotoDPF(BaseDPF):
     REQUIRED_SETTINGS = [
         SettingsItem('feed_url', 'Feed URL'),
         SettingsItem('user_id', 'Google Photos Username', primary=True),
-        SettingsItem('album_id', 'Album ID', primary=True),
+        SettingsItem('album_id', 'Album ID'),
     ]
 
-    def _parse_feed_url(self, url):
+    @property
+    def service_name(self):
+        return 'Google Photos'
+
+    @staticmethod
+    def _parse_feed_url(url):
         if urlsplit(url).path.startswith('/data/feed/'):
             return url
         elif urlsplit(url).netlock == 'picasaweb.google.com':
@@ -212,39 +240,48 @@ class GPhotoDPF(BaseDPF):
                     if link['rel'] == 'alternate':
                         return link['href']
 
-    def sync(self):
-        if not self.gphotos_configured:
-            logging.info('Google Photos is not configured.')
-            configure = raw_input('Configure it now? ')
-            if configure.lower() == 'yes':
-                self.gphotos_configure_dialogue()
-        elif not self.gphotos_enabled:
-            logging.info('Google Photos is not enabled.')
-            enable = raw_input('Enable it now? ')
-            enable = 'true' if enable.lower() == 'yes' else ''
-            self._save_settings(g_enabled=enable)
-        else:
-            feed_url = self.settings['gphotos'].get('feed_url')
-            for feed in feed_url:
-                response = requests.get(feed)
-                tags = BeautifulStoneSoup(
-                    response.content).findAll('media:content')
-                for tag in tags:
-                    if tag.get('url', False):
-                        filename = os.path.join(
-                            self.gphotos_dir,
-                            os.path.basename(urlsplit(tag['url'])[2]))
-                        if not os.path.isfile(filename):
-                            logging.info(
-                                'Getting img at {}'.format(tag['url']))
-                            response = requests.get(tag['url'], stream=True)
-                            try:
-                                img = Image.open(StringIO(response.content))
-                                img.save('{}'.format(filename), optimize=True,
-                                         progressive=True, quality=100,
-                                         subsampling=0)
-                            except IOError as e:
-                                logging.error(e)
+    def sync(self, photos_path, verify_local):
+        logging.info('Syncing {}'.format(self.service_name))
+        full_path = '{}/{}'.format(photos_path, self.subdir)
+        duplicates = list()
+        cloud_filelist = list()
+
+        response = requests.get(self.settings.get('feed_url'))
+        tags = BeautifulStoneSoup(
+            response.content).findAll('media:content')
+        for tag in tags:
+            if tag.get('url', False):
+                filename = os.path.join(
+                    full_path, os.path.basename(urlsplit(tag['url'])[2]))
+                cloud_filelist.append(filename)
+                if not os.path.isfile(filename):
+                    logging.info(
+                        'Getting img at {}'.format(tag['url']))
+                    response = requests.get(tag['url'], stream=True)
+                    try:
+                        img = Image.open(StringIO(response.content))
+                        img.save('{}'.format(filename), optimize=True,
+                                 progressive=True, quality=100,
+                                 subsampling=0)
+                    except IOError as e:
+                        logging.error(e)
+                else:
+                    duplicates.append(tag)
+
+        if duplicates:
+            logging.info(
+                'Skipped {} duplicate images from {}.'.format(
+                    len(duplicates), self.service_name))
+
+        if verify_local:
+            local_filelist = \
+                [os.path.join(full_path, f) for f in os.listdir(full_path)]
+            self.verify_local(cloud_filelist, local_filelist)
+            logging.info('Local {} files verified successfully.'.format(
+                self.service_name))
+
+        if not cloud_filelist:
+            logging.info('{} has nothing to sync.'.format(self.service_name))
 
 
 class DropboxController(BaseDPF):
@@ -312,21 +349,25 @@ class DPFConfigurator(object):
     def accounts(self):
         return self.config_dict.get('accounts')
 
+    @property
+    def photos_path(self):
+        return self.PATHS['photos']
+
     def add_account(self, klass, settings_dict):
         if klass not in self.ACCOUNT_TYPES:
-            print("Unsupported account type! {}".format(klass.__name__))
+            print('Unsupported account type! {}'.format(klass.__name__))
             return
-        self.config_dict['accounts'].append( (klass.__name__, settings_dict))
+        self.config_dict['accounts'].append((klass.__name__, settings_dict))
 
     def replace_account(self, klass, settings_dict, index):
         if klass not in self.ACCOUNT_TYPES:
-            print("Unsupported account type! {}".format(klass.__name__))
+            print('Unsupported account type! {}'.format(klass.__name__))
             return
         self.config_dict['accounts'][index] = (klass.__name__, settings_dict)
 
     def add_account_dialog(self):
         account_types = sorted(self.get_account_class_dict().keys())
-        print("Valid account types: {}".format(', '.join(account_types)))
+        print('Valid account types: {}'.format(', '.join(account_types)))
         account_type = raw_input('Account type: ')
         account_class = self.get_account_class(account_type)
         if account_class:
@@ -334,20 +375,20 @@ class DPFConfigurator(object):
             self.add_account(account_class, settings)
             self.save()
         else:
-            print("{} was not a valid account type.".format(account_type))
+            print('{} was not a valid account type.'.format(account_type))
 
     def edit_account_dialog(self):
         account_list = list()
         account_dict = dict()
         for index, account_entry in enumerate(self.accounts):
             account_dict[str(index)] = account_entry
-            line = "\t{}\t{}: {}".format(index, *account_entry)
+            line = '\t{}\t{}: {}'.format(index, *account_entry)
             account_list.append(line)
 
-        print("Current accounts:\n{}".format("\n".join(account_list)))
-        print("\t+\tAdd new account")
-        print("\tq\tQuit")
-        account_number = raw_input("Enter account number to edit: ")
+        print('Current accounts:\n{}'.format('\n'.join(account_list)))
+        print('\t+\tAdd new account')
+        print('\tq\tQuit')
+        account_number = raw_input('Enter account number to edit: ')
         if account_number == '+':
             self.add_account_dialog()
         elif account_number == 'q':
@@ -364,8 +405,7 @@ class DPFConfigurator(object):
                 print("Couldn't resolve account class type: {}"
                       .format(class_name))
         else:
-            print("Invalid entry: {}".format(account_number))
-
+            print('Invalid entry: {}'.format(account_number))
 
     def _create_photo_dirs(self):
         if not os.path.isdir(self.PATHS['photos']):
@@ -376,6 +416,8 @@ class DPFConfigurator(object):
             account_path = os.path.join(self.PATHS['photos'],
                                         dpf_instance.subdir)
             if not os.path.isdir(account_path):
+                logging.info(
+                    '{} directory missing. Creating.'.format(class_name))
                 os.makedirs(account_path)
 
 
@@ -383,20 +425,23 @@ class SuperDPF(AmazonS3DPF, GPhotoDPF):
     def __init__(self):
         self.config = DPFConfigurator()
 
-    def sync(self, restart_supervisor=False):
-        print("Syncing {} accounts".format(len(self.config.accounts)))
+    def sync(self, restart_sdpf=False, verify_local=False):
+        logging.info('{} accounts to sync...'.format(len(self.config.accounts)))
         for klass, config in self.config.accounts:
             pk = None
+            klass = self.config.get_account_class(klass)
             try:
                 pk = klass.settings_pk(config)
+                photos_path = self.config.photos_path
                 instance = klass(config)
-                instance.sync()
+                instance.sync(photos_path, verify_local)
             except Exception as e:
-                msg = "Error syncing {} ({}): {}"
+                msg = 'Error syncing {} ({}): {}'
                 traceback.print_exc()
-                print(msg.format(klass.__name__, pk, e))
-        if restart_supervisor:
-            os.system('/usr/bin/supervisorctl restart sdpf')
+                logging.error(msg.format(klass.__name__, pk, e))
+        if restart_sdpf:
+            logging.info('Restarting SDPF')
+            os.system('killall fim')
 
     def configure(self):
         try:
@@ -404,13 +449,9 @@ class SuperDPF(AmazonS3DPF, GPhotoDPF):
                 self.config.edit_account_dialog()
         except ExitConfig:
             pass
-        # if not len(self.config.accounts):
-        #     self.config.add_account_dialog()
-        # self._sync()
-        #
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="SuperDPF")
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='SuperDPF')
     parser.add_argument('--configure',
                         action='store_true',
                         dest='configure',
@@ -421,16 +462,21 @@ if __name__ == "__main__":
                         dest='sync',
                         default=False,
                         help='Synchronize photos')
-    parser.add_argument('--restart-supervisor',
+    parser.add_argument('--verify-local',
                         action='store_true',
-                        dest='restart_supervisor',
+                        dest='verify_local',
                         default=False,
-                        help='Restart supervisor after sync')
+                        help='Verify and remove local files not found in sync')
+    parser.add_argument('--restart-sdpf',
+                        action='store_true',
+                        dest='restart_sdpf',
+                        default=False,
+                        help='Restart sdpf after sync')
     args = parser.parse_args(sys.argv[1:])
     dpf = SuperDPF()
     if args.configure:
         dpf.configure()
     elif args.sync:
-        dpf.sync(args.restart_supervisor)
+        dpf.sync(args.restart_sdpf, args.verify_local)
     else:
         parser.print_help()
