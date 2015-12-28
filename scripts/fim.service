@@ -1,0 +1,16 @@
+[Unit]
+Description=Fbi IMproved Framebuffer Image Viewer
+Documentation=https://github.com/jmichelsen/SuperDPF
+After=multi-user.target
+
+[Service]
+Type=idle
+User=pi
+ExecStart=/usr/local/bin/fim --autozoom --random --verbose --recursive --slideshow 120 /home/pi/SuperDPF/sdpf_photos/ -T 1 -o fb
+Restart=always
+StandardOutput=tty
+TTYPath=/dev/tty1
+
+[Install]
+WantedBy=multi-user.target
+#WantedBy=getty@tty1.service
