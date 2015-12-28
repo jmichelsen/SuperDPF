@@ -80,16 +80,13 @@ class BaseDPF(object):
             pk.append(settings_object.get(value))
         return pk
 
-    @classmethod
-    def verify_local(cls, cloud_filelist, local_filelist):
+    def verify_local(self, cloud_filelist, local_filelist):
         for local_file in local_filelist:
             if local_file not in cloud_filelist:
-                logging.info('Deleting local file {} not in {}'.format(
-                    local_file, cls.__name__))
+                logging.info('Deleting local file {}'.format(local_file))
                 os.remove(local_file)
 
-    @staticmethod
-    def stylize_image(image):
+    def stylize_image(self, image):
         return image
 
     @property
