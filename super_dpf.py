@@ -247,10 +247,13 @@ class UnsplashResource(BaseDPF):
         duplicates = list()
 
         if self.settings.get('category') == 'none' or False:
-            url = '{}/{}'.format(UNSPLASH['base'], UNSPLASH['random'])
+            url = '{}/{}/{}'.format(UNSPLASH['base'], UNSPLASH['random'],
+                                    self.settings.get('preferred_res'),
+                                    self.settings.get('preferred_res'))
         else:
-            url = '{}/{}/{}'.format(UNSPLASH['base'], UNSPLASH['category'],
-                                    self.settings.get('category'))
+            url = '{}/{}/{}/{}'.format(UNSPLASH['base'], UNSPLASH['category'],
+                                       self.settings.get('category'),
+                                       self.settings.get('preferred_res'))
 
         response = requests.get(url)
         img_hash = hashlib.md5(response.request.path_url).hexdigest()
