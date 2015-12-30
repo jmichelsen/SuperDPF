@@ -1,11 +1,12 @@
 import argparse
 import boto3
-import yaml
-import traceback
+import hashlib
 import logging
 import os
-import sys
 import requests
+import sys
+import traceback
+import yaml
 
 from PIL import Image
 
@@ -15,7 +16,7 @@ from BeautifulSoup import BeautifulStoneSoup
 
 from StringIO import StringIO
 
-from constants import PATHS
+from constants import PATHS, UNSPLASH
 
 requests.packages.urllib3.disable_warnings()
 
@@ -94,7 +95,7 @@ class BaseDPF(object):
         raise NotImplementedError('Implement service_name in subclass.')
 
 
-class AmazonS3DPF(BaseDPF):
+class AmazonS3Resource(BaseDPF):
     REQUIRED_SETTINGS = [
         SettingsItem('aws_access_key', 'AWS Access Key'),
         SettingsItem('aws_secret', 'AWS Secret'),
@@ -153,8 +154,10 @@ class AmazonS3DPF(BaseDPF):
         if not cloud_filelist:
             logging.info('{} has nothing to sync.'.format(self.service_name))
 
+        logging.info('Done syncing {}'.format(self.service_name))
 
-class GPhotoDPF(BaseDPF):
+
+class GPhotoResource(BaseDPF):
     REQUIRED_SETTINGS = [
         SettingsItem('feed_url', 'Feed URL'),
         SettingsItem('user_id', 'Google Photos Username', primary=True),
@@ -222,6 +225,55 @@ class GPhotoDPF(BaseDPF):
         if not cloud_filelist:
             logging.info('{} has nothing to sync.'.format(self.service_name))
 
+        logging.info('Done syncing {}'.format(self.service_name))
+
+
+class UnsplashResource(BaseDPF):
+    REQUIRED_SETTINGS = [
+        SettingsItem('preferred_res', 'Preferred Resolution',
+                     help_text='eg 1600x900'),
+        SettingsItem('category', 'Unsplash Category',
+                     help_text='choices: buildings, food, nature, people,'
+                               ' technology, objects, none', primary=True)
+    ]
+
+    @property
+    def service_name(self):
+        return 'Unsplash'
+
+    def sync(self, verify_local):
+        logging.info('Syncing {}'.format(self.service_name))
+        full_path = '{}/{}'.format(PATHS['photos'], self.subdir)
+        duplicates = list()
+
+        if self.settings.get('category') == 'none' or False:
+            url = '{}/{}'.format(UNSPLASH['base'], UNSPLASH['random'])
+        else:
+            url = '{}/{}/{}'.format(UNSPLASH['base'], UNSPLASH['category'],
+                                    self.settings.get('category'))
+
+        response = requests.get(url)
+        img_hash = hashlib.md5(response.request.path_url).hexdigest()
+        filename = '{}/{}.jpg'.format(full_path, img_hash)
+        if not os.path.isfile(filename):
+            logging.info('Getting img at {}'.format(response.url))
+            try:
+                img = Image.open(StringIO(response.content))
+                img.save('{}'.format(filename), 'JPEG', optimize=True,
+                         progressive=True, quality=100, subsampling=0)
+            except IOError as e:
+                logging.error(e)
+        else:
+            duplicates.append(filename)
+
+            if duplicates:
+                logging.info(
+                    'Skipped {} duplicate images from {}'.format(
+                        len(duplicates), self.service_name
+                    ))
+
+        logging.info('Done syncing {}'.format(self.service_name))
+
 
 class DropboxController(BaseDPF):
     pass
@@ -247,8 +299,9 @@ class ExitConfig(Exception):
 
 class DPFConfigurator(object):
     ACCOUNT_TYPES = [
-        AmazonS3DPF,
-        GPhotoDPF
+        AmazonS3Resource,
+        GPhotoResource,
+        UnsplashResource
     ]
 
     def __init__(self):

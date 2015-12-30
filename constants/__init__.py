@@ -1,6 +1,12 @@
 import os
 from logging.config import dictConfig
 
+UNSPLASH = {
+    'base': 'https://source.unsplash.com',
+    'random': 'random',
+    'category': 'category'
+}
+
 PROJECT = os.path.expanduser('~/SuperDPF')
 PATHS = {
     'conf_template': '{}/.conf_template.json'.format(PROJECT),
