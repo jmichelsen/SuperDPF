@@ -130,8 +130,7 @@ class AmazonS3Resource(BaseDPF):
         for bucket in buckets:
             s3bucket = s3.Bucket(bucket)
             for s3object in s3bucket.objects.iterator():
-                filename = os.path.join(
-                    full_path, s3object.key, IMAGE_EXTENSION)
+                filename = os.path.join(full_path, s3object.key)
                 cloud_filelist.append(filename)
                 if not os.path.isfile(filename):
                     log.info('Downloading {}'.format(s3object.key))
