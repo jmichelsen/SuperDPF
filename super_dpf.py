@@ -248,7 +248,6 @@ class UnsplashResource(BaseDPF):
 
         if self.settings.get('category') == 'none' or False:
             url = '{}/{}/{}'.format(UNSPLASH['base'], UNSPLASH['random'],
-                                    self.settings.get('preferred_res'),
                                     self.settings.get('preferred_res'))
         else:
             url = '{}/{}/{}/{}'.format(UNSPLASH['base'], UNSPLASH['category'],
@@ -269,11 +268,10 @@ class UnsplashResource(BaseDPF):
         else:
             duplicates.append(filename)
 
-            if duplicates:
-                logging.info(
-                    'Skipped {} duplicate images from {}'.format(
-                        len(duplicates), self.service_name
-                    ))
+        if duplicates:
+            logging.info(
+                'Skipped {} duplicate images from {}'.format(
+                    len(duplicates), self.service_name))
 
         logging.info('Done syncing {}'.format(self.service_name))
 
