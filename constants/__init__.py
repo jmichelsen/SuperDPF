@@ -1,6 +1,8 @@
 import os
 from logging.config import dictConfig
 
+IMAGE_EXTENSION = 'jpg'
+
 UNSPLASH = {
     'base': 'https://source.unsplash.com',
     'random': 'random',
@@ -11,10 +13,12 @@ PROJECT = os.path.expanduser('~/SuperDPF')
 PATHS = {
     'conf_template': '{}/.conf_template.json'.format(PROJECT),
     'config': '{}/config.yml'.format(PROJECT),
-    'photos': '{}/sdpf_photos'.format(PROJECT)
+    'photos': '{}/sdpf_photos'.format(PROJECT),
+    'logs': '{}/logs'.format(PROJECT)
 }
 
-LOG_LOCATION = PROJECT
+
+LOG_LOCATION = os.path.join(PROJECT, 'logs')
 LOGGING = {
     'version': 1,
     'formatters': {
@@ -31,16 +35,12 @@ LOGGING = {
             'level': 'DEBUG',
             'class': 'logging.NullHandler',
         },
-        # 'mail_admins': {
-        #     'level': 'ERROR',
-        #     'class': 'logging.handlers.AdminEmailHandler'
-        # },
         'logfile': {
             'level': 'INFO',
-            'class': 'logging.handlers.RotatingFileHandler',
+            'class': 'logging.handlers.TimedRotatingFileHandler',
             'filename': '{}/sdpf.log'.format(LOG_LOCATION),
-            'maxBytes': 50000000,
-            'backupCount': 2,
+            'when': 'midnight',
+            'backupCount': 7,
             'formatter': 'standard',
         },
         'console': {
@@ -57,15 +57,15 @@ LOGGING = {
         }
     },
     'loggers': {
-        'django': {
-            'handlers': ['console', 'syslog'],
-            'propagate': True,
-            'level': 'WARN',
-        },
         'urllib3': {
             'handlers': ['console', 'logfile', 'syslog'],
             'propagate': True,
             'level': 'ERROR',
+        },
+        'sdpf': {
+            'handlers': ['console', 'logfile'],
+            'propagate': False,
+            'level': 'DEBUG',
         },
         '': {
             'handlers': ['console', 'logfile', 'syslog'],
