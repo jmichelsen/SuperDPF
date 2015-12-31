@@ -98,13 +98,13 @@ class BaseDPF(object):
 
             w, h = img.size
             ratio = FOREGROUND_SIZE['height'] / h
-            img = img.resize((int(w*ratio), int(h*ratio)))
+            img = img.resize((int(w*ratio), int(h*ratio)), Image.ANTIALIAS)
 
-            new_w, new_h = img.size
-            background = background.resize(BACKGROUND_SIZE)
+            w, h = img.size
+            background = background.resize(BACKGROUND_SIZE, Image.ANTIALIAS)
             background = background.filter(ImageFilter.GaussianBlur(radius=50))
             w2, h2 = background.size
-            paste_dimensions = (((w2 - new_w)//2), ((h2 - new_h)//2))
+            paste_dimensions = (((w2 - w)//2), ((h2 - h)//2))
             background.paste(img, paste_dimensions)
 
             return background
@@ -225,7 +225,8 @@ class GPhotoResource(BaseDPF):
                     response = requests.get(tag['url'], stream=True)
                     try:
                         img = Image.open(StringIO(response.content))
-                        if img.height > img.width:
+                        if img.height > img.width or \
+                                img.width < BACKGROUND_SIZE[0]:
                             img = self.stylize_image(img)
                         img.save('{}'.format(filename), optimize=True,
                                  progressive=True, quality=100,
