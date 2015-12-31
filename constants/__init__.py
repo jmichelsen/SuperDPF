@@ -1,8 +1,8 @@
 import os
 from logging.config import dictConfig
 
-FOREGROUND_SIZE = {'width': 800, 'height': 800}
-BACKGROUND_SIZE = (1440, 900)
+FOREGROUND_SIZE = {'width': 0, 'height': 1100}
+BACKGROUND_SIZE = (1600, 1200)
 
 IMAGE_EXTENSION = 'jpg'
 
