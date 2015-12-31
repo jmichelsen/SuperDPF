@@ -1,6 +1,9 @@
 import os
 from logging.config import dictConfig
 
+FOREGROUND_SIZE = {'width': 800, 'height': 800}
+BACKGROUND_SIZE = (1440, 900)
+
 IMAGE_EXTENSION = 'jpg'
 
 UNSPLASH = {

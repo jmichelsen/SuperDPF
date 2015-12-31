@@ -1,3 +1,5 @@
+from __future__ import division
+
 import argparse
 import boto3
 import hashlib
@@ -10,7 +12,7 @@ import yaml
 
 log = logging.getLogger('sdpf')
 
-from PIL import Image
+from PIL import Image, ImageFilter
 
 from urlparse import urlsplit
 
@@ -18,7 +20,8 @@ from BeautifulSoup import BeautifulStoneSoup
 
 from StringIO import StringIO
 
-from constants import PATHS, UNSPLASH, IMAGE_EXTENSION
+from constants import PATHS, UNSPLASH, IMAGE_EXTENSION,\
+    FOREGROUND_SIZE, BACKGROUND_SIZE
 
 requests.packages.urllib3.disable_warnings()
 
@@ -89,8 +92,21 @@ class BaseDPF(object):
                 log.info('Deleting local file {}'.format(local_file))
                 os.remove(local_file)
 
-    def stylize_image(self, image):
-        return image
+    def stylize_image(self, img):
+        background = img.copy()
+
+        w, h = img.size
+        ratio = FOREGROUND_SIZE['height'] / h
+        img = img.resize((int(w*ratio), int(h*ratio)))
+
+        new_w, new_h = img.size
+        background = background.resize(BACKGROUND_SIZE)
+        background = background.filter(ImageFilter.GaussianBlur(radius=50))
+        w2, h2 = background.size
+        paste_dimensions = (((w2 - new_w)//2), ((h2 - new_h)//2))
+        background.paste(img, paste_dimensions)
+
+        return background
 
     @property
     def service_name(self):
@@ -204,6 +220,8 @@ class GPhotoResource(BaseDPF):
                     response = requests.get(tag['url'], stream=True)
                     try:
                         img = Image.open(StringIO(response.content))
+                        if img.height > img.width:
+                            img = self.stylize_image(img)
                         img.save('{}'.format(filename), optimize=True,
                                  progressive=True, quality=100,
                                  subsampling=0)
@@ -264,6 +282,8 @@ class UnsplashResource(BaseDPF):
             log.info('Getting img at {}'.format(response.url))
             try:
                 img = Image.open(StringIO(response.content))
+                if img.height > img.width:
+                    img = self.stylize_image(img)
                 img.save('{}'.format(filename), 'JPEG', optimize=True,
                          progressive=True, quality=100, subsampling=0)
             except IOError as e:
