@@ -93,20 +93,25 @@ class BaseDPF(object):
                 os.remove(local_file)
 
     def stylize_image(self, img):
-        background = img.copy()
+        try:
+            background = img.copy()
 
-        w, h = img.size
-        ratio = FOREGROUND_SIZE['height'] / h
-        img = img.resize((int(w*ratio), int(h*ratio)))
+            w, h = img.size
+            ratio = FOREGROUND_SIZE['height'] / h
+            img = img.resize((int(w*ratio), int(h*ratio)))
 
-        new_w, new_h = img.size
-        background = background.resize(BACKGROUND_SIZE)
-        background = background.filter(ImageFilter.GaussianBlur(radius=50))
-        w2, h2 = background.size
-        paste_dimensions = (((w2 - new_w)//2), ((h2 - new_h)//2))
-        background.paste(img, paste_dimensions)
+            new_w, new_h = img.size
+            background = background.resize(BACKGROUND_SIZE)
+            background = background.filter(ImageFilter.GaussianBlur(radius=50))
+            w2, h2 = background.size
+            paste_dimensions = (((w2 - new_w)//2), ((h2 - new_h)//2))
+            background.paste(img, paste_dimensions)
 
-        return background
+            return background
+        except ValueError as e:
+            log.info(
+                'Styling failed. Saving original. Exception: {}'.format(e))
+            return img
 
     @property
     def service_name(self):
