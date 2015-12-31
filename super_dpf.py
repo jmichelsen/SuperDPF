@@ -1,11 +1,14 @@
 import argparse
 import boto3
-import yaml
-import traceback
+import hashlib
 import logging
 import os
-import sys
 import requests
+import sys
+import traceback
+import yaml
+
+log = logging.getLogger('sdpf')
 
 from PIL import Image
 
@@ -15,7 +18,7 @@ from BeautifulSoup import BeautifulStoneSoup
 
 from StringIO import StringIO
 
-from constants import PATHS
+from constants import PATHS, UNSPLASH, IMAGE_EXTENSION
 
 requests.packages.urllib3.disable_warnings()
 
@@ -83,7 +86,7 @@ class BaseDPF(object):
     def verify_local(self, cloud_filelist, local_filelist):
         for local_file in local_filelist:
             if local_file not in cloud_filelist:
-                logging.info('Deleting local file {}'.format(local_file))
+                log.info('Deleting local file {}'.format(local_file))
                 os.remove(local_file)
 
     def stylize_image(self, image):
@@ -94,7 +97,7 @@ class BaseDPF(object):
         raise NotImplementedError('Implement service_name in subclass.')
 
 
-class AmazonS3DPF(BaseDPF):
+class AmazonS3Resource(BaseDPF):
     REQUIRED_SETTINGS = [
         SettingsItem('aws_access_key', 'AWS Access Key'),
         SettingsItem('aws_secret', 'AWS Secret'),
@@ -107,7 +110,7 @@ class AmazonS3DPF(BaseDPF):
         return 'Amazon S3'
 
     def sync(self, verify_local):
-        logging.info('Syncing {}'.format(self.service_name))
+        log.info('Syncing {}'.format(self.service_name))
         full_path = '{}/{}'.format(PATHS['photos'], self.subdir)
         duplicates = list()
         cloud_filelist = list()
@@ -127,19 +130,19 @@ class AmazonS3DPF(BaseDPF):
         for bucket in buckets:
             s3bucket = s3.Bucket(bucket)
             for s3object in s3bucket.objects.iterator():
-                filename = '{}/{}'.format(full_path, s3object.key)
+                filename = os.path.join(full_path, s3object.key)
                 cloud_filelist.append(filename)
                 if not os.path.isfile(filename):
-                    logging.info('Downloading {}'.format(s3object.key))
+                    log.info('Downloading {}'.format(s3object.key))
                     try:
                         s3bucket.download_file(s3object.key, filename)
                     except IOError as e:
-                        logging.error(e)
+                        log.error(e)
                 else:
                     duplicates.append(s3object.key)
 
         if duplicates:
-            logging.info(
+            log.info(
                 'Skipped {} duplicate images from {}.'.format(
                     len(duplicates), self.service_name))
 
@@ -147,14 +150,16 @@ class AmazonS3DPF(BaseDPF):
             local_filelist = \
                 [os.path.join(full_path, f) for f in os.listdir(full_path)]
             self.verify_local(cloud_filelist, local_filelist)
-            logging.info('Local {} files verified successfully.'.format(
+            log.info('Local {} files verified successfully.'.format(
                 self.service_name))
 
         if not cloud_filelist:
-            logging.info('{} has nothing to sync.'.format(self.service_name))
+            log.info('{} has nothing to sync.'.format(self.service_name))
+
+        log.info('Done syncing {}'.format(self.service_name))
 
 
-class GPhotoDPF(BaseDPF):
+class GPhotoResource(BaseDPF):
     REQUIRED_SETTINGS = [
         SettingsItem('feed_url', 'Feed URL'),
         SettingsItem('user_id', 'Google Photos Username', primary=True),
@@ -180,7 +185,7 @@ class GPhotoDPF(BaseDPF):
                         return link['href']
 
     def sync(self, verify_local):
-        logging.info('Syncing {}'.format(self.service_name))
+        log.info('Syncing {}'.format(self.service_name))
         full_path = '{}/{}'.format(PATHS['photos'], self.subdir)
         duplicates = list()
         cloud_filelist = list()
@@ -194,7 +199,7 @@ class GPhotoDPF(BaseDPF):
                     full_path, os.path.basename(urlsplit(tag['url'])[2]))
                 cloud_filelist.append(filename)
                 if not os.path.isfile(filename):
-                    logging.info(
+                    log.info(
                         'Getting img at {}'.format(tag['url']))
                     response = requests.get(tag['url'], stream=True)
                     try:
@@ -203,12 +208,12 @@ class GPhotoDPF(BaseDPF):
                                  progressive=True, quality=100,
                                  subsampling=0)
                     except IOError as e:
-                        logging.error(e)
+                        log.error(e)
                 else:
                     duplicates.append(tag)
 
         if duplicates:
-            logging.info(
+            log.info(
                 'Skipped {} duplicate images from {}.'.format(
                     len(duplicates), self.service_name))
 
@@ -216,11 +221,62 @@ class GPhotoDPF(BaseDPF):
             local_filelist = \
                 [os.path.join(full_path, f) for f in os.listdir(full_path)]
             self.verify_local(cloud_filelist, local_filelist)
-            logging.info('Local {} files verified successfully.'.format(
+            log.info('Local {} files verified successfully.'.format(
                 self.service_name))
 
         if not cloud_filelist:
-            logging.info('{} has nothing to sync.'.format(self.service_name))
+            log.info('{} has nothing to sync.'.format(self.service_name))
+
+        log.info('Done syncing {}'.format(self.service_name))
+
+
+class UnsplashResource(BaseDPF):
+    REQUIRED_SETTINGS = [
+        SettingsItem('preferred_res', 'Preferred Resolution',
+                     help_text='eg 1600x900'),
+        SettingsItem('category', 'Unsplash Category',
+                     help_text='choices: buildings, food, nature, people,'
+                               ' technology, objects, none', primary=True)
+    ]
+
+    @property
+    def service_name(self):
+        return 'Unsplash'
+
+    def sync(self, verify_local):
+        log.info('Syncing {}'.format(self.service_name))
+        full_path = '{}/{}'.format(PATHS['photos'], self.subdir)
+        duplicates = list()
+
+        if self.settings.get('category') == 'none' or False:
+            url = '{}/{}/{}'.format(UNSPLASH['base'], UNSPLASH['random'],
+                                    self.settings.get('preferred_res'))
+        else:
+            url = '{}/{}/{}/{}'.format(UNSPLASH['base'], UNSPLASH['category'],
+                                       self.settings.get('category'),
+                                       self.settings.get('preferred_res'))
+
+        response = requests.get(url)
+        img_hash = hashlib.md5(response.request.path_url).hexdigest()
+        filename = os.path.join(
+            full_path, '{}.{}'.format(img_hash, IMAGE_EXTENSION))
+        if not os.path.isfile(filename):
+            log.info('Getting img at {}'.format(response.url))
+            try:
+                img = Image.open(StringIO(response.content))
+                img.save('{}'.format(filename), 'JPEG', optimize=True,
+                         progressive=True, quality=100, subsampling=0)
+            except IOError as e:
+                log.error(e)
+        else:
+            duplicates.append(filename)
+
+        if duplicates:
+            log.info(
+                'Skipped {} duplicate images from {}'.format(
+                    len(duplicates), self.service_name))
+
+        log.info('Done syncing {}'.format(self.service_name))
 
 
 class DropboxController(BaseDPF):
@@ -247,13 +303,14 @@ class ExitConfig(Exception):
 
 class DPFConfigurator(object):
     ACCOUNT_TYPES = [
-        AmazonS3DPF,
-        GPhotoDPF
+        AmazonS3Resource,
+        GPhotoResource,
+        UnsplashResource
     ]
 
     def __init__(self):
         if not os.path.isfile(PATHS['config']):
-            logging.info('Initializing empty config...')
+            log.info('Initializing empty config...')
             with open(PATHS['config'], 'w') as config_file:
                 yaml.dump(dict(), config_file)
             self.config_dict = dict()
@@ -261,6 +318,9 @@ class DPFConfigurator(object):
         else:
             with open(PATHS['config']) as config:
                 self.config_dict = yaml.load(config)
+
+        if not os.path.isdir(PATHS['logs']):
+            os.makedirs(PATHS['logs'])
 
         self.config_dict.setdefault('accounts', list())
         self._create_photo_dirs()
@@ -344,7 +404,7 @@ class DPFConfigurator(object):
             account_path = os.path.join(PATHS['photos'],
                                         dpf_instance.subdir)
             if not os.path.isdir(account_path):
-                logging.info(
+                log.info(
                     '{} directory missing. Creating.'.format(class_name))
                 os.makedirs(account_path)
 
@@ -354,7 +414,7 @@ class SuperDPF(object):
         self.config = DPFConfigurator()
 
     def sync(self, restart_sdpf=False, verify_local=False):
-        logging.info('{} accounts to sync..'.format(len(self.config.accounts)))
+        log.info('{} accounts to sync..'.format(len(self.config.accounts)))
         for klass, config in self.config.accounts:
             pk = None
             klass = self.config.get_account_class(klass)
@@ -365,9 +425,9 @@ class SuperDPF(object):
             except Exception as e:
                 msg = 'Error syncing {} ({}): {}'
                 traceback.print_exc()
-                logging.error(msg.format(klass.__name__, pk, e))
+                log.error(msg.format(klass.__name__, pk, e))
         if restart_sdpf:
-            logging.info('Restarting SDPF')
+            log.info('Restarting SDPF')
             os.system('killall fim')
 
     def configure(self):
